@@ -1,0 +1,10 @@
+{
+    "total_test_cases": 74,
+    "cases_with_all_sections": 68,
+    "section_completion_accuracy": 91.89,
+    "duplicate_section_cases": 44,
+    "corrupted_term_cases": 0,
+    "average_rouge1": 0.7362,
+    "average_rouge2": 0.451,
+    "average_rougeL": 0.6639
+}
