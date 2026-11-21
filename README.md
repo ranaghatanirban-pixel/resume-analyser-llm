@@ -283,3 +283,12 @@ Possible future improvements include:
 - Gemma 2B
 - PyMuPDF
 - JSONL datasets
+
+- ## Trained Model
+
+The trained Gemma + LoRA adapter is not included in this repository because model files can be large.
+
+The project expects the trained adapter to be placed in:
+
+```text
+gemma-resume-analyser/
