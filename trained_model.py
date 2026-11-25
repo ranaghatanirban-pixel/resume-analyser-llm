@@ -125,13 +125,32 @@ def load_model_and_tokenizer() -> tuple[Any, Any, str]:
     device = detect_device()
     adapter_path = resolve_adapter_path()
     hf_token = get_hf_token()
-    auth_kwargs: dict[str, Any] = {"token": hf_token} if hf_token else {}
 
-    tokenizer = _load_from_hf_with_fallback(
-        AutoTokenizer,
-        BASE_MODEL,
-        **auth_kwargs,
-    )
+    if not hf_token:
+        raise EnvironmentError(
+            "GatedRepoError: No Hugging Face token found. "
+            "google/gemma-2b-it is a gated model. "
+            "Set HF_TOKEN in your deployment secrets or as an environment variable. "
+            "Get a token at https://huggingface.co/settings/tokens and accept the "
+            "Gemma licence at https://huggingface.co/google/gemma-2b-it"
+        )
+
+    auth_kwargs: dict[str, Any] = {"token": hf_token}
+
+    try:
+        tokenizer = _load_from_hf_with_fallback(
+            AutoTokenizer,
+            BASE_MODEL,
+            **auth_kwargs,
+        )
+    except Exception as exc:
+        raise EnvironmentError(
+            f"GatedRepoError: Failed to load tokenizer for {BASE_MODEL}. "
+            "Make sure your HF_TOKEN is valid, has READ access, and that you "
+            "have accepted the Gemma licence at https://huggingface.co/google/gemma-2b-it. "
+            f"Original error: {exc}"
+        ) from exc
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -144,11 +163,18 @@ def load_model_and_tokenizer() -> tuple[Any, Any, str]:
         # CPU / MPS: low_cpu_mem_usage speeds up loading
         model_kwargs["low_cpu_mem_usage"] = True
 
-    base_model = _load_from_hf_with_fallback(
-        AutoModelForCausalLM,
-        BASE_MODEL,
-        **model_kwargs,
-    )
+    try:
+        base_model = _load_from_hf_with_fallback(
+            AutoModelForCausalLM,
+            BASE_MODEL,
+            **model_kwargs,
+        )
+    except Exception as exc:
+        raise EnvironmentError(
+            f"GatedRepoError: Failed to load model {BASE_MODEL}. "
+            "Make sure your HF_TOKEN is valid and you have accepted the Gemma licence. "
+            f"Original error: {exc}"
+        ) from exc
 
     is_local_adapter = Path(adapter_path).exists()
     adapter_kwargs: dict[str, Any] = {} if is_local_adapter else dict(auth_kwargs)

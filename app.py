@@ -318,12 +318,48 @@ if pdf_bytes is not None and file_name is not None:
                     icon=":material/error:",
                 )
             else:
-                st.write("Loading Gemma 2B + LoRA model (first run may take ~1 min)…")
-                get_cached_model()
+                try:
+                    st.write("Loading Gemma 2B + LoRA model (first run may take ~1 min)…")
+                    get_cached_model()
 
-                st.write("Generating structured analysis…")
-                raw_result = analyze_resume(resume_text)
-                sections = parse_analysis(raw_result)
+                    st.write("Generating structured analysis…")
+                    raw_result = analyze_resume(resume_text)
+                    sections = parse_analysis(raw_result)
+                except Exception as exc:
+                    exc_str = str(exc)
+                    status.update(label="Model load failed", state="error")
+
+                    # ── Gated / auth errors ───────────────────────────────
+                    is_gated = any(k in exc_str for k in (
+                        "GatedRepoError", "gated", "401", "403",
+                        "Cannot access gated repo", "HTTPStatusError",
+                        "token", "credential",
+                    ))
+                    if is_gated:
+                        st.error(
+                            "**🔒 Hugging Face authentication failed**\n\n"
+                            "The model `google/gemma-2b-it` is **gated** — you need to:\n\n"
+                            "1. ✅ [Accept the Gemma licence](https://huggingface.co/google/gemma-2b-it) "
+                            "(one-time, free, click **Agree and access repository**)\n"
+                            "2. 🔑 Get a **READ** token at "
+                            "[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)\n"
+                            "3. 📋 Add it to your deployment secrets:\n"
+                            "   - **Streamlit Cloud:** App → ⋮ → Settings → Secrets → "
+                            "`HF_TOKEN = \"hf_...\"`\n"
+                            "   - **HF Spaces:** Settings → Variables and secrets → "
+                            "`HF_TOKEN = \"hf_...\"`\n"
+                            "4. 🔄 **Reboot the app** after saving the secret",
+                            icon=":material/lock:",
+                        )
+                    else:
+                        st.error(
+                            f"**Model error:** {exc_str[:400]}\n\n"
+                            "Check the app logs for the full traceback.",
+                            icon=":material/error:",
+                        )
+                    st.stop()
+                else:
+                    pass  # fall through only on success
 
                 st.session_state["analysis_cache"][resume_key] = {
                     "resume_text": resume_text,
