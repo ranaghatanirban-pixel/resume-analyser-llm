@@ -46,9 +46,18 @@ SECTION_ALIASES = {
 # Match longer aliases before shorter ones so "Missing Skills" is never split at "Skills".
 _SORTED_ALIASES = sorted(SECTION_ALIASES.keys(), key=len, reverse=True)
 _HEADING_PATTERN = re.compile(
-    r"(?im)^(?:\s*(?:\d+[\.\)]\s*|[-*•]\s*|#+\s*)?)\*{0,2}("
+    r"(?im)^(?:\s*(?:\d+[\.]\s*|[-*•]\s*|#+\s*)?)\\*{0,2}("
     + "|".join(re.escape(alias) for alias in _SORTED_ALIASES)
     + r")\*{0,2}\s*:\s*\*{0,2}(.*)$"
+)
+_HEADING_PATTERN = re.compile(
+    r"(?im)^(?:\s*(?:\d+[\.)]\s*|[-*•]\s*|#+\s*)?)\\*{0,2}("
+    + "|".join(re.escape(alias) for alias in _SORTED_ALIASES)
+    + r")\*{0,2}\s*:\s*\*{0,2}(.*)$"
+)
+# Simpler, more reliable heading pattern
+_HEADING_PATTERN = re.compile(
+    r"(?im)^\s*\*{0,2}(" + "|".join(re.escape(a) for a in _SORTED_ALIASES) + r")\*{0,2}\s*:\s*\*{0,2}(.*)$"
 )
 _INLINE_HEADING_PATTERN = re.compile(
     r"(?i)(?<!\w)("
@@ -71,16 +80,28 @@ def resolve_adapter_path() -> str:
 
 def get_hf_token() -> str | None:
     """Return a Hugging Face token from environment variables or Streamlit secrets."""
-    token = os.getenv("HF_TOKEN")
-    if token:
+    # 1. Environment variable (highest priority)
+    token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+    if token and token.startswith("hf_"):
         return token
 
+    # 2. Streamlit secrets
     try:
-        import streamlit as st
+        import streamlit as st  # noqa: PLC0415
 
         secret_token = st.secrets.get("HF_TOKEN")
-        if secret_token:
+        if secret_token and str(secret_token).startswith("hf_"):
             return str(secret_token)
+    except Exception:
+        pass
+
+    # 3. huggingface_hub cached login
+    try:
+        from huggingface_hub import HfFolder  # noqa: PLC0415
+
+        cached = HfFolder.get_token()
+        if cached:
+            return cached
     except Exception:
         pass
 
@@ -125,10 +146,14 @@ def load_model_and_tokenizer() -> tuple[Any, Any, str]:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # NOTE: Use `torch_dtype` (not `dtype`) — correct kwarg for from_pretrained
     dtype = torch.float16 if device in ("mps", "cuda") else torch.float32
-    model_kwargs: dict[str, Any] = {"dtype": dtype, **auth_kwargs}
+    model_kwargs: dict[str, Any] = {"torch_dtype": dtype, **auth_kwargs}
     if device == "cuda":
         model_kwargs["device_map"] = "auto"
+    else:
+        # CPU / MPS: low_cpu_mem_usage speeds up loading
+        model_kwargs["low_cpu_mem_usage"] = True
 
     base_model = _load_from_hf_with_fallback(
         AutoModelForCausalLM,
@@ -137,7 +162,7 @@ def load_model_and_tokenizer() -> tuple[Any, Any, str]:
     )
 
     is_local_adapter = Path(adapter_path).exists()
-    adapter_kwargs = {} if is_local_adapter else dict(auth_kwargs)
+    adapter_kwargs: dict[str, Any] = {} if is_local_adapter else dict(auth_kwargs)
     model = PeftModel.from_pretrained(base_model, adapter_path, **adapter_kwargs)
 
     if device in ("mps", "cpu"):
@@ -161,8 +186,7 @@ def format_analysis(result: str) -> str:
     """Normalize model output into the 8 canonical sections without duplicates."""
     normalized = result.replace("\r\n", "\n").replace("\r", "\n").strip()
 
-    # Ensure inline headings like "... Skills: Python Missing Skills: AWS" start on new lines
-    # without splitting inside multi-word headings such as "Missing Skills:".
+    # Ensure inline headings start on new lines without splitting multi-word headings.
     lines_prepared: list[str] = []
     for raw_line in normalized.split("\n"):
         cleaned_line = raw_line.strip()
@@ -310,8 +334,7 @@ def analyze_resume(resume_text: str) -> str:
     target_device = model.device if device == "cuda" else device
     inputs = {key: value.to(target_device) for key, value in inputs.items()}
 
-    # Avoid no_repeat_ngram_size here because it blocks copying exact names,
-    # universities, and dates that appear in the input resume.
+    # Avoid no_repeat_ngram_size — it blocks copying exact names, universities, and dates.
     with torch.no_grad():
         outputs = model.generate(
             **inputs,

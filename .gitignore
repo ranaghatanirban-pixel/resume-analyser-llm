@@ -11,6 +11,7 @@ __pycache__/
 
 # OS files
 .DS_Store
+Thumbs.db
 
 # Streamlit local secrets & env files (never commit)
 .env
@@ -19,5 +20,18 @@ __pycache__/
 # Training checkpoints (large optimizer/RNG states)
 gemma-resume-analyser/checkpoint-*/
 
+# Hugging Face cache
+.cache/
+
+# IDE
+.vscode/
+.idea/
+
 # Unrelated nested repo if present
 ranaghatanirban-pixel/
+
+# Vercel build cache
+.vercel/
+
+# Uploaded/temp files
+*.tmp
