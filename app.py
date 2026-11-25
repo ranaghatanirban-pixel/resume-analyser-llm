@@ -9,8 +9,9 @@ from resume_parser import extract_text_from_pdf
 from trained_model import (
     analyze_resume,
     extract_job_fit_score,
-    load_model_and_tokenizer,
+    get_hf_token,
     parse_analysis,
+    INFERENCE_MODE,
 )
 
 # ── Page config ────────────────────────────────────────────────────────────────
@@ -198,15 +199,7 @@ def init_session_state() -> None:
 init_session_state()
 
 # ── Hugging Face token check ───────────────────────────────────────────────────
-hf_token: str | None = None
-try:
-    hf_token = st.secrets.get("HF_TOKEN") or None
-except Exception:
-    pass
-
-if not hf_token:
-    import os
-    hf_token = os.getenv("HF_TOKEN") or None
+hf_token: str | None = get_hf_token()
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 sample_files = sorted(SAMPLE_DIR.glob("*.pdf")) if SAMPLE_DIR.is_dir() else []
@@ -223,7 +216,8 @@ with st.sidebar:
 
     # HF Token status in sidebar
     if hf_token:
-        st.success("🔑 HF token loaded", icon=":material/check_circle:")
+        mode_label = "🌐 API mode" if INFERENCE_MODE == "api" else "💻 Local mode"
+        st.success(f"🔑 HF token loaded · {mode_label}", icon=":material/check_circle:")
     else:
         st.warning("⚠️ No HF token — set `HF_TOKEN` in secrets", icon=":material/key:")
         with st.expander("How to add your token"):
