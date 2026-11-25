@@ -44,25 +44,14 @@ SECTION_ALIASES = {
 }
 
 # Match longer aliases before shorter ones so "Missing Skills" is never split at "Skills".
+# Use [*]{0,2} instead of \*{0,2} — the backslash-quantifier form is rejected by Python 3.14+
 _SORTED_ALIASES = sorted(SECTION_ALIASES.keys(), key=len, reverse=True)
+_alias_group = "(" + "|".join(re.escape(a) for a in _SORTED_ALIASES) + ")"
 _HEADING_PATTERN = re.compile(
-    r"(?im)^(?:\s*(?:\d+[\.]\s*|[-*•]\s*|#+\s*)?)\\*{0,2}("
-    + "|".join(re.escape(alias) for alias in _SORTED_ALIASES)
-    + r")\*{0,2}\s*:\s*\*{0,2}(.*)$"
-)
-_HEADING_PATTERN = re.compile(
-    r"(?im)^(?:\s*(?:\d+[\.)]\s*|[-*•]\s*|#+\s*)?)\\*{0,2}("
-    + "|".join(re.escape(alias) for alias in _SORTED_ALIASES)
-    + r")\*{0,2}\s*:\s*\*{0,2}(.*)$"
-)
-# Simpler, more reliable heading pattern
-_HEADING_PATTERN = re.compile(
-    r"(?im)^\s*\*{0,2}(" + "|".join(re.escape(a) for a in _SORTED_ALIASES) + r")\*{0,2}\s*:\s*\*{0,2}(.*)$"
+    r"(?im)^\s*[*]{0,2}" + _alias_group + r"[*]{0,2}\s*:\s*[*]{0,2}(.*)$"
 )
 _INLINE_HEADING_PATTERN = re.compile(
-    r"(?i)(?<!\w)("
-    + "|".join(re.escape(alias) for alias in _SORTED_ALIASES)
-    + r")\s*:"
+    r"(?i)(?<!\w)" + _alias_group + r"\s*:"
 )
 
 _MODEL_CACHE: tuple[Any, Any, str] | None = None
