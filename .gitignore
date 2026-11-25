@@ -1,5 +1,23 @@
+# Virtual environments
 .venv/
+venv/
+env/
+
+# Python caches
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS files
 .DS_Store
+
+# Streamlit local secrets & env files (never commit)
 .env
+.streamlit/secrets.toml
+
+# Training checkpoints (large optimizer/RNG states)
+gemma-resume-analyser/checkpoint-*/
+
+# Unrelated nested repo if present
+ranaghatanirban-pixel/

@@ -1,221 +1,103 @@
-import fitz
+from __future__ import annotations
+
+import os
 import re
+from pathlib import Path
+from typing import Union
+
+import pymupdf
 
 
-# ============================================================
-# REMOVE DUPLICATE LINES
-# ============================================================
+def remove_duplicate_lines(text: str) -> str:
+    """Remove duplicate lines while preserving the original order."""
+    cleaned_lines: list[str] = []
+    seen_lines: set[str] = set()
 
-def remove_duplicate_lines(text):
-    """
-    Remove duplicate lines while preserving the original order.
-    """
-
-    lines = text.splitlines()
-
-    cleaned_lines = []
-    seen_lines = set()
-
-    for line in lines:
-
+    for line in text.splitlines():
         line = line.strip()
-
-        # Skip completely empty lines
         if not line:
             continue
 
-        # Normalize spaces
         normalized = re.sub(r"\s+", " ", line)
-
-        # Create lowercase comparison version
         comparison = normalized.lower()
 
-        # Remove duplicate line
         if comparison not in seen_lines:
-
             seen_lines.add(comparison)
             cleaned_lines.append(normalized)
 
     return "\n".join(cleaned_lines)
 
 
-# ============================================================
-# REMOVE REPEATED CONSECUTIVE TEXT
-# ============================================================
+def remove_repeated_text(text: str) -> str:
+    """Remove consecutive duplicate lines caused by overlapping PDF text layers."""
+    cleaned_lines: list[str] = []
+    previous_line: str | None = None
 
-def remove_repeated_text(text):
-    """
-    Remove repeated text fragments that may occur because
-    of overlapping PDF text layers.
-    """
-
-    lines = text.splitlines()
-
-    cleaned_lines = []
-
-    previous_line = None
-
-    for line in lines:
-
+    for line in text.splitlines():
         line = line.strip()
-
         if not line:
             continue
 
-        # If the same line appears consecutively, ignore it
-        if line.lower() == previous_line:
-
+        lowered = line.lower()
+        if lowered == previous_line:
             continue
 
         cleaned_lines.append(line)
-
-        previous_line = line.lower()
+        previous_line = lowered
 
     return "\n".join(cleaned_lines)
 
 
-# ============================================================
-# EXTRACT TEXT FROM PDF
-# ============================================================
-
-def extract_text_from_pdf(pdf_path):
-
-    text = ""
+def extract_text_from_pdf(pdf_source: Union[str, os.PathLike[str], bytes]) -> str:
+    """Extract and clean text from a PDF file path or raw PDF bytes."""
+    pages_text: list[str] = []
 
     try:
+        if isinstance(pdf_source, (bytes, bytearray)):
+            open_kwargs = {"stream": bytes(pdf_source), "filetype": "pdf"}
+        else:
+            open_kwargs = {"filename": os.fspath(pdf_source)}
 
-        document = fitz.open(pdf_path)
-
-        print("Number of pages:", len(document))
-
-        for page_number, page in enumerate(document):
-
-            print(
-                f"Reading page {page_number + 1}..."
-            )
-
-            # Extract text from page
-            page_text = page.get_text(
-                "text"
-            )
-
-            text += page_text
-
-            text += "\n"
-
-
-        document.close()
-
-
-    except Exception as e:
-
-        print(
-            f"Error reading PDF: {e}"
-        )
-
+        with pymupdf.open(**open_kwargs) as document:
+            for page in document:
+                page_text = page.get_text("text")
+                if page_text:
+                    pages_text.append(page_text)
+    except Exception:
         return ""
 
+    raw_text = "\n".join(pages_text)
+    if not raw_text.strip():
+        return ""
 
-    # ========================================================
-    # CLEAN EXTRACTED TEXT
-    # ========================================================
+    cleaned = remove_repeated_text(raw_text)
+    cleaned = remove_duplicate_lines(cleaned)
 
-    text = remove_repeated_text(text)
+    final_lines = [
+        re.sub(r"\s+", " ", line.strip())
+        for line in cleaned.splitlines()
+        if line.strip()
+    ]
+    return "\n".join(final_lines)
 
-    text = remove_duplicate_lines(text)
-
-
-    # ========================================================
-    # NORMALIZE SPACES
-    # ========================================================
-
-    lines = text.splitlines()
-
-    final_lines = []
-
-    for line in lines:
-
-        line = line.strip()
-
-        if not line:
-            continue
-
-        # Replace multiple spaces with one
-        line = re.sub(
-            r"\s+",
-            " ",
-            line
-        )
-
-        final_lines.append(line)
-
-
-    text = "\n".join(final_lines)
-
-
-    return text
-
-
-# ============================================================
-# TEST PDF PARSER
-# ============================================================
 
 if __name__ == "__main__":
-
-    pdf_path = "resume.pdf"
-
+    default_pdf = Path("resume.pdf")
     print("=" * 80)
     print("RESUME PDF PARSER")
     print("=" * 80)
-
     print("\nReading resume...")
 
-    resume_text = extract_text_from_pdf(
-        pdf_path
-    )
-
-
-    if not resume_text.strip():
-
-        print(
-            "\nERROR: Could not extract text from PDF."
-        )
-
+    extracted = extract_text_from_pdf(default_pdf)
+    if not extracted.strip():
+        print("\nERROR: Could not extract text from PDF.")
     else:
-
-        print(
-            "\nResume extracted successfully!"
-        )
-
-        print(
-            "\nExtracted characters:",
-            len(resume_text)
-        )
-
-        print(
-            "\n"
-            + "=" * 80
-        )
-
-        print(
-            "EXTRACTED RESUME TEXT"
-        )
-
-        print(
-            "=" * 80
-        )
-
-        print(resume_text)
-
-        print(
-            "\n"
-            + "=" * 80
-        )
-
-        print(
-            "PARSING COMPLETED"
-        )
-
-        print(
-            "=" * 80
-        )
+        print("\nResume extracted successfully!")
+        print("\nExtracted characters:", len(extracted))
+        print("\n" + "=" * 80)
+        print("EXTRACTED RESUME TEXT")
+        print("=" * 80)
+        print(extracted)
+        print("\n" + "=" * 80)
+        print("PARSING COMPLETED")
+        print("=" * 80)
